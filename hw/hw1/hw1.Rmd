@@ -1,0 +1,277 @@
+<h1>Homework 1</h1><br> 
+
+<h1>Alan Wu </h1><br> 
+
+### imports 
+
+```{r}
+library(ggplot2)
+library(tidyr)
+```
+
+## Question 2: Interpreting the Posterior 
+
+We need to simulate a beta-binomial model with different parameters based on the data. The data shows that there are 3 out of 4 successful trials. We need to adjust and plot for the following alpha and beta values: 
+
+- (alpha, beta) = (0,0)
+- (alpha, beta) = (1,1)
+- (alpha, beta) = (1/2, 1/2)
+- (alpha, beta) = (1, 2)
+- (alpha, beta) = (2, 1)
+
+We use 1,2 for the values where alpha > beta or when beta > alpha. 
+
+```{r}
+x <- seq(0, 1, length.out = 500)
+priors <- list(
+  "(0,0)" = c(0,0), 
+  "(1,1)" = c(1,1), 
+  "(1/2,1/2)" = c(0.5, 0.5), 
+  "(1,2)" = c(1,2), 
+  "(2,1)" = c(2,1)
+)
+s_low <- 3 
+f_low <- 1 
+s_hi <- 75 
+f_hi <- 25 
+
+```
+
+```{r}
+# for the 3 successes out of 4 trials
+posterior_3_4 = data.frame() 
+
+for (name in names(priors)) {
+  p <- priors[[name]]
+  alpha_prior <- p[1]
+  beta_prior  <- p[2]
+  
+  alpha_post <- alpha_prior + s_low
+  beta_post  <- beta_prior + f_low
+  
+  # Calculate the density (the y-values)
+  y <- dbeta(x, alpha_post, beta_post)
+  
+  # Store it in a temporary data frame
+  temp_df <- data.frame(
+    prob_val = x, 
+    density = y, 
+    prior_type = name
+  )
+  
+  
+  posterior_3_4 <- rbind(posterior_3_4, temp_df)
+}
+```
+
+Function to help us define the full process better: 
+
+```{r}
+generate_posterior_df_2 <- function(s,f){
+  x <- seq(0, 1, length.out = 500)
+  priors <- list(
+    "(0,0)" = c(0,0), 
+    "(1,1)" = c(1,1), 
+    "(1/2,1/2)" = c(0.5, 0.5), 
+    "(1,2)" = c(1,2), 
+    "(2,1)" = c(2,1)
+  )
+  
+  posteriors = data.frame() 
+
+  for (name in names(priors)) {
+    p <- priors[[name]]
+    alpha_prior <- p[1]
+    beta_prior  <- p[2]
+    
+    alpha_post <- alpha_prior + s
+    beta_post  <- beta_prior + f
+    
+    # Calculate the density (the y-values)
+    y <- dbeta(x, alpha_post, beta_post)
+    
+    # Store it in a temporary data frame
+    temp_df <- data.frame(
+      prob_val = x, 
+      density = y, 
+      prior_type = name
+    )
+
+    posteriors <- rbind(posteriors, temp_df)
+    
+  
+  }
+  
+  return(posteriors)
+}
+```
+
+Plot results for 3 successes out of 4
+
+```{r}
+posteriors_3_4 <- generate_posterior_df_2(3,1)
+ggplot(posteriors_3_4, aes(x = prob_val, y = density, color = prior_type)) +
+  geom_line(linewidth = 1) +
+  labs(title = "Posteriors (3 Successes, 1 Failure)",
+       x = "Probability of Success (p)",
+       y = "Density") +
+  theme_minimal()
+
+```
+
+Plot results for 75 successes out of 100 
+
+```{r}
+posteriors_75_100 <- generate_posterior_df_2(75, 25)
+ggplot(posteriors_75_100, aes(x = prob_val, y = density, color = prior_type)) +
+  geom_line(linewidth = 1) +
+  labs(title = "Posteriors (75 Successes, 25 Failure)",
+       x = "Probability of Success (p)",
+       y = "Density") +
+  theme_minimal()
+```
+
+
+## Question 4: Posterior Distribution on Real Data 
+
+Developing a model on the manchester data: want to predict the number of goals that the club would be expected to score in a future match. 
+
+The primary model we can use to model this is the gamma-poisson conjugate model. This is because we are dealing with count data. We will focus on the distribution of the team goals to find an expected number of goals. 
+
+Since we do not really have a good idea of the number of goals that manchester city would score per game, then we will use a relatively non-informative prior for the gamma distribution. <br>
+
+Based on the gamma-poisson conjugacy, we know that the posterior distribution will take on a gamma distribution with alpha = alpha + sum(y) and beta = beta + n, where n is the sample size. 
+
+```{r}
+manchester <- read.csv('./data/manchester_city_2024.csv')
+head(manchester)
+```
+Computing the posterior values 
+```{r}
+
+alpha <- 1
+beta <- 1
+n <- nrow(manchester)
+sum_y = sum(manchester$team_goals) 
+
+alpha_post_team <- alpha + sum_y
+beta_post_team <- beta + n
+
+lambdas <- seq(0, 5, length.out = 1000)
+density_vals <- dgamma(lambdas, shape = alpha_post_team, rate = beta_post_team)
+posterior_curve_team <- data.frame(
+  lambda = lambdas,
+  density = density_vals
+)
+
+```
+
+
+
+Plotting the posterior distribution vs the actual data 
+
+```{r}
+ggplot() +
+  # The Histogram: y = after_stat(density) is key to align scales
+  geom_histogram(data = manchester, aes(x = team_goals, y = after_stat(density)), 
+                 binwidth = 1, fill = "steelblue", color = "white", alpha = 0.6) +
+  
+  # The Posterior Line: Using our manual data frame
+  geom_line(data = posterior_curve_team, aes(x = lambda, y = density), 
+            color = "darkred", size = 1.2) +
+  
+  # Adding a vertical line for the mean to show where it centers
+  geom_vline(xintercept = alpha_post_team/beta_post_team, linetype = "dashed", color = "black") +
+  
+  labs(title = "Man City: Observed Team Goal Frequency vs. Posterior Team Goal Rate",
+       x = "Goals / Lambda (Rate)",
+       y = "Density") +
+  theme_minimal()
+```
+```{r}
+cat(sprintf("Observed Mean:     %.2f\n", mean(manchester$team_goals)))
+cat(sprintf("Observed Variance: %.2f\n", var(manchester$team_goals)))
+cat(sprintf("Posterior Mean: %.2f\n", alpha_post_team / beta_post_team))
+cat(sprintf("Posterior variance: %.2f\n", alpha_post_team / (beta_post_team*beta_post_team)))
+```
+
+
+## Question 5: Posterior Distribution on Real Data 
+
+For this part, we can use the same method as before, with gamma-poisson conjugacy. To define the prior, we will use alpha = 0.01 and beta = 0.01, an even more weakly informative prior than before. We have no clue on the defensive capabilities of manchester city and will let the data take over. 
+
+```{r}
+alpha <- 0.01
+beta <- 0.01
+n <- nrow(manchester)
+sum_y = sum(manchester$opp_goals) 
+
+alpha_post_opp <- alpha + sum_y
+beta_post_opp <- beta + n
+
+lambdas <- seq(0, 5, length.out = 1000)
+density_vals <- dgamma(lambdas, shape = alpha_post_opp, rate = beta_post_opp)
+posterior_curve_opp <- data.frame(
+  lambda = lambdas,
+  density = density_vals
+)
+
+```
+
+```{r}
+ggplot() +
+  # The Histogram: y = after_stat(density) is key to align scales
+  geom_histogram(data = manchester, aes(x = opp_goals, y = after_stat(density)), 
+                 binwidth = 1, fill = "skyblue", color = "white", alpha = 0.6) +
+  
+  # The Posterior Line: Using our manual data frame
+  geom_line(data = posterior_curve_opp, aes(x = lambda, y = density), 
+            color = "darkred", size = 1.2) +
+  
+  geom_vline(xintercept = alpha_post_opp/beta_post_opp, linetype = "dashed", color = "black") +
+  
+  labs(title = "Man City: Observed Opposition Goal Frequency vs. Posterior Opposition Goal Rate",
+       x = "Goals / Lambda (Rate)",
+       y = "Density") +
+  theme_minimal()
+```
+```{r}
+cat(sprintf("Observed Opp Goals Mean:     %.2f\n", mean(manchester$opp_goals)))
+cat(sprintf("Observed Opp Goals Variance: %.2f\n", var(manchester$opp_goals)))
+cat(sprintf("Posterior Opp Goals Mean: %.2f\n", alpha_post_opp / beta_post_opp))
+cat(sprintf("Posterior Opp Goals variance: %.2f\n", alpha_post_opp / (beta_post_opp*beta_post_opp)))
+```
+
+## Question 6: Posterior Predictive 
+
+Our goal is to use 1000 simulations from the above parts to describe the number of games that manchester city will win. The process will be the following to simulate the posterior predictive distribution: 
+
+1. sample 1000 lambdas from the posterior distribution for team goals 
+1. sample 1000 lambdas from the posterior distribution for opposition goals 
+1. simulate the number of goals scored each game from poisson distribution for both team and opposition
+1. compare these two and get the rate for wins, losses and ties for each sim. 
+
+```{r}
+set.seed(42)
+posterior_team <- rgamma(1000, shape=alpha_post_team, rate=beta_post_team)
+posterior_opp <- rgamma(1000, shape=alpha_post_opp, rate=beta_post_opp)
+
+sim_team_goals <- rpois(1000, lambda = posterior_team)
+sim_opp_goals  <- rpois(1000, lambda = posterior_opp)
+
+results <- data.frame(
+  team = sim_team_goals,
+  opp = sim_opp_goals
+)
+
+results$outcome <- ifelse(results$team > results$opp, "Win",
+                          ifelse(results$team == results$opp, "Tie", "Loss"))
+
+prob_table <- table(results$outcome) / 1000 * 100.0
+print(prob_table)
+```
+
+The results are in percentages. 
+
+## Question 8: Preview of Gibbs Sampler 
+
