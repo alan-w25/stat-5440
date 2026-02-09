@@ -18,6 +18,9 @@ m_mu <- 22   # Prior mean
 m_star <- (sigma2 / (n * s2_mu + sigma2)) * m_mu + (n * s2_mu / (n * s2_mu + sigma2)) * y_bar
 s2_star <- (sigma2 * s2_mu) / (n * s2_mu + sigma2)
 
+m_star 
+s2_star
+
 # Generate posterior samples
 posterior <- rnorm(1000, mean = m_star, sd = sqrt(s2_star))
 
@@ -96,6 +99,8 @@ m_mu <- 50    # Prior mean
 m_star <- (sigma2 / (n * s2_mu + sigma2)) * m_mu + (n * s2_mu / (n * s2_mu + sigma2)) * y_bar
 s2_star <- (sigma2 * s2_mu) / (n * s2_mu + sigma2)
 
+m_star
+s2_star
 
 # Samples 
 posterior_mu <- rnorm(1000, mean = m_star, sd = sqrt(s2_star) )
