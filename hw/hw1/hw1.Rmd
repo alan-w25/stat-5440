@@ -1,6 +1,11 @@
-<h1>Homework 1</h1><br> 
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+# Homework 1  
 
-<h1>Alan Wu </h1><br> 
+# Alan Wu
 
 ### imports 
 
@@ -49,10 +54,8 @@ for (name in names(priors)) {
   alpha_post <- alpha_prior + s_low
   beta_post  <- beta_prior + f_low
   
-  # Calculate the density (the y-values)
   y <- dbeta(x, alpha_post, beta_post)
   
-  # Store it in a temporary data frame
   temp_df <- data.frame(
     prob_val = x, 
     density = y, 
@@ -87,10 +90,9 @@ generate_posterior_df_2 <- function(s,f){
     alpha_post <- alpha_prior + s
     beta_post  <- beta_prior + f
     
-    # Calculate the density (the y-values)
+    
     y <- dbeta(x, alpha_post, beta_post)
     
-    # Store it in a temporary data frame
     temp_df <- data.frame(
       prob_val = x, 
       density = y, 
@@ -130,6 +132,7 @@ ggplot(posteriors_75_100, aes(x = prob_val, y = density, color = prior_type)) +
        y = "Density") +
   theme_minimal()
 ```
+The overall trend that we realize is that when we introduce greater data, the posterior distribution tends to form to the parameters of the actual data. For the situation with 3 successes and 1 failure, at most we have a parameter of 2, either alpha or beta. Therefore, the prior has greater influence on the shape of the posterior distribution. However, when we increase the number of samples, despite the proportion of the number of successes being the same (75%), the posterior distribution shifts in favor of the data. 
 
 
 ## Question 4: Posterior Distribution on Real Data 
@@ -138,7 +141,7 @@ Developing a model on the manchester data: want to predict the number of goals t
 
 The primary model we can use to model this is the gamma-poisson conjugate model. This is because we are dealing with count data. We will focus on the distribution of the team goals to find an expected number of goals. 
 
-Since we do not really have a good idea of the number of goals that manchester city would score per game, then we will use a relatively non-informative prior for the gamma distribution. <br>
+Since we do not really have a good idea of the number of goals that manchester city would score per game, then we will use a relatively non-informative prior for the gamma distribution. $\\$
 
 Based on the gamma-poisson conjugacy, we know that the posterior distribution will take on a gamma distribution with alpha = alpha + sum(y) and beta = beta + n, where n is the sample size. 
 
@@ -148,7 +151,6 @@ head(manchester)
 ```
 Computing the posterior values 
 ```{r}
-
 alpha <- 1
 beta <- 1
 n <- nrow(manchester)
@@ -198,11 +200,11 @@ cat(sprintf("Posterior variance: %.2f\n", alpha_post_team / (beta_post_team*beta
 
 ## Question 5: Posterior Distribution on Real Data 
 
-For this part, we can use the same method as before, with gamma-poisson conjugacy. To define the prior, we will use alpha = 0.01 and beta = 0.01, an even more weakly informative prior than before. We have no clue on the defensive capabilities of manchester city and will let the data take over. 
+For this part, we can use the same method as before, with gamma-poisson conjugacy. To define the prior, we will use alpha = 1 and beta = 1, since we have no prior knowledge regarding the outcomes of opposition goals scored against manchester. We have no clue on the defensive capabilities of manchester city and will let the data take over. 
 
 ```{r}
-alpha <- 0.01
-beta <- 0.01
+alpha <- 1
+beta <- 1
 n <- nrow(manchester)
 sum_y = sum(manchester$opp_goals) 
 
@@ -274,4 +276,104 @@ print(prob_table)
 The results are in percentages. 
 
 ## Question 8: Preview of Gibbs Sampler 
+
+Consider a normal model with unknown mean and unknown variance. Using the following steps, describe the process of iteratively sampling from the posterior distribution:
+
+1. Simulate data $y_1, y_2, \dots , y_n \sim N(10, 3.3)$ where n = 100. Prior to simulation set your seed with set.seed(5).
+2.Assign independent conjugate priors:
+  - $\mu \sim N(0,50)$,
+  - $\sigma^2 \sim Inverse-Gamma(2, 2)$
+3. Iteratively sample from the posterior 10,000 times where you use your most recent value of $\mu \text{ and } \sigma^2$
+sampled in the conditional posterior distributions of the other parameter: 
+  - $\mu | \sigma^2, y$
+  - $\sigma^2 | \mu, y$
+  
+Report a 95% posterior interval for both $\mu$ and $\sigma^2$ based on your samples of each. Are your samples of $\mu$ and $\sigma^2$ correlated with each other?
+
+We choose to use the prior means given to use to use as the initialization of the parameters. We define $\theta_1$ as the mean mu and the $\theta_2$ as the variance of the parameter mu. 
+
+We start by developing two vectors of size and start with our initializations. 
+
+```{r}
+set.seed(5)
+
+iter <- 10000
+
+y <- rnorm(100, 10, 3.3)
+s2_mu <- 50 
+m_mu <- 0 
+n <- length(y)
+y_bar <- mean(y)
+alpha <- 2 
+beta <- 2 
+
+theta1 <- rep(NA,iter)
+theta2 <- rep(NA,iter)
+
+theta1[1] <- 0
+theta2[1] <- (beta)/(alpha-1)
+```
+
+Then, for the gibbs sampler, we sample each next step with respect to the other parameter conditiional distribution. This means: 
+
+- when we sample for mu, we condition on the current sampled value of $\sigma^2$ (e.g., $\sigma^2$ = 12.5 from the previous iteration)
+- when we sample for mu_s2, we condition on the current sampled value of $\mu$ (e.g., $\mu$ = 9.8 that we just sampled in this iteration)
+
+```{r}
+for (i in 2:iter){
+  
+  curr_sigma2 <- theta2[i-1]
+  curr_mu <- theta1[i-1]
+  
+  post_mu <- ((1/s2_mu) / (n/curr_sigma2 + 1/s2_mu))*m_mu + 
+  ((n/curr_sigma2)/(n/curr_sigma2 + 1/s2_mu))*y_bar 
+  post_s2 <- 1/((1/s2_mu) + (n/curr_sigma2))
+  
+  alpha_post <- alpha + n/2 
+  beta_post <- beta + 0.5 * sum((y - curr_mu)^2)
+  
+  #first sample mu 
+  theta1[i] <- rnorm(1, mean=post_mu, sd=sqrt(post_s2))
+  
+  #then sample sigma2
+  theta2[i] <- 1/rgamma(1, shape=alpha_post, rate=beta_post)
+}
+
+```
+
+MCMC Convergence Evaluation 
+
+```{r}
+par(mfrow = c(2, 2)) # Arrange plots in a 2x2 grid
+
+# Trace Plot for Mu
+plot(theta1, type = "l", col = "steelblue", 
+     main = expression(paste("Trace Plot for ", mu)),
+     xlab = "Iteration", ylab = expression(mu))
+abline(h = 10, col = "red", lwd = 2)
+
+# Trace Plot for Sigma^2
+plot(theta2, type = "l", col = "darkorange", 
+     main = expression(paste("Trace Plot for ", sigma^2)),
+     xlab = "Iteration", ylab = expression(sigma^2))
+abline(h = 3.3^2, col = "red", lwd = 2)
+
+# Histograms
+hist(theta1, breaks = 50, col = "lightblue", main = expression(paste("Posterior of ", mu)))
+hist(theta2, breaks = 50, col = "wheat", main = expression(paste("Posterior of ", sigma^2)))
+```
+
+Results  
+
+```{r}
+mu_interval <- quantile(theta1, probs = c(0.025, 0.975))
+sigma2_interval <- quantile(theta2, probs = c(0.025, 0.975))
+posterior_corr <- cor(theta1, theta2)
+
+print(list(mu_95_interval = mu_interval, 
+           sigma2_95_interval = sigma2_interval, 
+           correlation = posterior_corr))
+```
+
+
 
